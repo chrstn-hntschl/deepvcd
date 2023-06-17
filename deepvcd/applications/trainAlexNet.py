@@ -6,7 +6,7 @@ import json
 
 import tensorflow as tf
 from tensorflow.keras.optimizers import SGD
-from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
+from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
 from tensorflow.keras import losses
 
 from deepvcd.helpers.image import read_image, one_hot
@@ -77,6 +77,7 @@ def _main(dataset_descriptor: str,
           norm: str="lrn",
           input_size: int=227,
           max_epochs: int=90,
+          checkpoints_dest: str=None,
           seed=None,
           model_weights_fname: str = None
           ):
@@ -148,6 +149,19 @@ def _main(dataset_descriptor: str,
                                   )
     callbacks.append(early_stop_cb)
 
+    if checkpoints_dest is not None:
+        model_checkpoints_cb = ModelCheckpoint(filepath=os.path.join(checkpoints_dest, "AlexNetFlat.{epoch:02d}-{val_loss:.2f}.hdf5")
+                                               monitor='val_loss',
+                                               verbose=0,
+                                               save_best_only=True,
+                                               save_weights_only=True,
+                                               mode='auto',
+                                               save_freq='epoch',
+                                               options=None,
+                                               initial_value_threshold=None
+                                               )
+        callbacks.append(model_checkpoints_cb)
+
     alexnet, history = train_alexnet(train_ds=train_ds,
                                      num_classes=num_classes,
                                      norm=norm,
@@ -199,13 +213,22 @@ if __name__ == '__main__':
                         help="Input image size. 224 and 227 (default) are supported. 224 will result in padding.",
                         default=227,
                         required=False)
-    parser.add_argument('-s', '--seed', dest='seed', type=int, help='Set the random seed', default=None,
+    parser.add_argument('-s', '--seed', dest='seed', 
+                        type=int, 
+                        help='Set the random seed', 
+                        default=None,
                         required=False)
     parser.add_argument('-e', '--epochs',
                         dest='epochs',
                         type=int,
                         help='Train for x epochs',
                         default=200,
+                        required=False)
+    parser.add_argument("-c", "--checkpoints_dest",
+                        dest="checkpoints",
+                        type=str,
+                        help="Path to checkpoints directory. If set, incremental model improvements are stored during training.",
+                        default=None,
                         required=False)
     parser.add_argument('dataset',
                         type=str,
@@ -221,5 +244,6 @@ if __name__ == '__main__':
           norm=None if args.norm.lower()=="none" else args.norm,
           input_size=args.input_size,
           max_epochs=args.epochs,
+          checkpoints=args.checkpoints,
           seed=args.seed,
           model_weights_fname=args.model_dest)
