@@ -3,8 +3,10 @@ import os
 import pathlib
 import numpy as np
 import random
+import logging
 
 import yaml
+from tqdm import tqdm
 try:
     from yaml import CLoader as Loader
 except ImportError:
@@ -12,6 +14,8 @@ except ImportError:
     warnings.warn("LibYAML not found - yaml descriptor will be loaded using the much slower PyYAML package.")
 
 import tensorflow as tf
+
+log = logging.getLogger(__name__)
 
 class DatasetDescriptor(object):
     def __init__(self, name, version, basepath='/'):
@@ -243,17 +247,21 @@ class DirectoryLoader(object):
     def get_dataset(self):
         name = self.dataset_dir.name
         version = "undefined"
-        dataset = DatasetDescriptor(name=name, version=version, basepath=self.dataset_dir)
+        dataset = DatasetDescriptor(name=name, version=version, basepath=str(self.dataset_dir))
 
         subsets = ["train", "val", "test"]
         for subset in subsets:
             subset_dir = self.dataset_dir / subset
             if subset_dir.is_dir():
+                log.info(f"Loading subset '{subset}'")
+                categories = list()
                 for class_dir in subset_dir.iterdir():
                     if class_dir.is_dir():
-                        category = class_dir.name
-                        fnames = [p.resolve() for p in pathlib.Path(class_dir).glob("**/*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"}]
-                        dataset.add_labeled_images(subset=subset, category=category, fnames=fnames)
+                        categories.append(class_dir.name)
+
+                for category in tqdm(categories):
+                    fnames = [p.resolve() for p in pathlib.Path(class_dir).glob("**/*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"}]
+                    dataset.add_labeled_images(subset=subset, category=category, fnames=fnames)
 
         return dataset
 
