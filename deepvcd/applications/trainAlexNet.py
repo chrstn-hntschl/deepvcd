@@ -13,7 +13,7 @@ from deepvcd.helpers.image import read_image, one_hot
 from deepvcd.callbacks import NumpyEncoder
 import deepvcd.models.alexnet
 from deepvcd.models.alexnet.AlexNet import preprocess_train, preprocess_predict
-from deepvcd.dataset.descriptor import YAMLLoader
+from deepvcd.dataset.descriptor import YAMLLoader, DirectoryLoader
 
 
 log = logging.getLogger(__name__)
@@ -84,8 +84,13 @@ def _main(dataset_descriptor: str,
         from datetime import datetime
         seed = datetime.now().microsecond
 
-    log.info("Loading dataset from '{filename}'".format(filename=dataset_descriptor))
-    deepvcd_ds = YAMLLoader.read(dataset_descriptor)
+    deepvcd_ds = None
+    if pathlib.Path(dataset_descriptor).is_file():
+        log.info("Loading dataset from descriptor file '{filename}'".format(filename=dataset_descriptor))
+        deepvcd_ds = YAMLLoader.read(yaml_file=dataset_descriptor)
+    if pathlib.Path(dataset_descriptor).is_dir():
+        log.info("Loading dataset from directory '{directory}'".format(directory=dataset_descriptor))
+        deepvcd_ds = DirectoryLoader.load(dataset_dir=dataset_descriptor)
     num_classes = len(deepvcd_ds.get_labels())
     num_train_samples = len(deepvcd_ds.get_train_images())
 
@@ -209,7 +214,7 @@ if __name__ == '__main__':
                         required=False)
     parser.add_argument('dataset',
                         type=str,
-                        help='Path to dataset descriptor yaml.',
+                        help='Path to dataset descriptor yaml or directory following a dataset structure (see documentation).',
                         default=None)
     parser.add_argument('model_dest',
                         type=str,
