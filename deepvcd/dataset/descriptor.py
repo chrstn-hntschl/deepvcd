@@ -4,6 +4,7 @@ import pathlib
 import numpy as np
 import random
 import logging
+from abc import ABC, abstractmethod
 
 import yaml
 from tqdm import tqdm
@@ -195,7 +196,12 @@ def get_cross_val_folds(ds_descriptor, n_folds=4, seed=None):
     return fold_descrs
 
 
-class YAMLLoader(object):
+class DescriptorLoader(ABC):
+    @abstractmethod
+    def get_dataset(self) -> DatasetDescriptor:
+        pass
+
+class YAMLLoader(DescriptorLoader):
     def __init__(self, yaml_file, basepath=None) -> None:
         """
         Loads a DatasetDescriptor object from a yaml file. Use the static `read` method for convenience.
@@ -205,7 +211,7 @@ class YAMLLoader(object):
         self.yaml_file = yaml_file
         self.basepath = basepath
 
-    def get_dataset(self):
+    def get_dataset(self) -> DatasetDescriptor:
         data = yaml.load(open(self.yaml_file, 'r'), Loader=Loader)
         if self.basepath is not None:
             basepath = self.basepath
@@ -238,13 +244,13 @@ class YAMLLoader(object):
         return YAMLLoader(yaml_file, basepath=basepath).get_dataset()
 
 
-class DirectoryLoader(object):
+class DirectoryLoader(DescriptorLoader):
     def __init__(self, dataset_path:str) -> None:
         self.dataset_dir = pathlib.Path(dataset_path)
         if not self.dataset_dir.is_dir():
             raise ValueError("Dataset path #{0}' is not a valid path!".format(dataset_path))
 
-    def get_dataset(self):
+    def get_dataset(self) -> DatasetDescriptor:
         name = self.dataset_dir.name
         version = "undefined"
         dataset = DatasetDescriptor(name=name, version=version, basepath=str(self.dataset_dir))
