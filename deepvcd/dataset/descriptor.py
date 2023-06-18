@@ -266,7 +266,7 @@ class DirectoryLoader(DescriptorLoader):
                         categories.append(class_dir.name)
 
                 for category in tqdm(categories):
-                    fnames = [p.resolve() for p in pathlib.Path(class_dir).glob("**/*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"}]
+                    fnames = [p.resolve() for p in pathlib.Path(subset_dir / category).glob("**/*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"}]
                     dataset.add_labeled_images(subset=subset, category=category, fnames=fnames)
 
         return dataset
