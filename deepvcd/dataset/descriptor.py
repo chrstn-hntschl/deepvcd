@@ -1,9 +1,13 @@
 import warnings
 import os
+import pathlib
 import numpy as np
 import random
+import logging
+from abc import ABC, abstractmethod
 
 import yaml
+from tqdm import tqdm
 try:
     from yaml import CLoader as Loader
 except ImportError:
@@ -11,6 +15,8 @@ except ImportError:
     warnings.warn("LibYAML not found - yaml descriptor will be loaded using the much slower PyYAML package.")
 
 import tensorflow as tf
+
+log = logging.getLogger(__name__)
 
 class DatasetDescriptor(object):
     def __init__(self, name, version, basepath='/'):
@@ -133,7 +139,7 @@ class DatasetDescriptor(object):
 
 def get_cross_val_folds(ds_descriptor, n_folds=4, seed=None):
     """
-    Splits the train set of the given DatasetDescriptor into `n_folds` cross volidation folds.
+    Splits the train set of the given DatasetDescriptor into `n_folds` cross validation folds.
     Returns n_folds DatasetDescriptors with train and val subsets set according to generated folds.
     If seed is not None, it will be used to make the random splits reproducible.
     """
@@ -190,8 +196,13 @@ def get_cross_val_folds(ds_descriptor, n_folds=4, seed=None):
     return fold_descrs
 
 
-class YAMLLoader(object):
-    def __init__(self, yaml_file, basepath=None):
+class DescriptorLoader(ABC):
+    @abstractmethod
+    def get_dataset(self) -> DatasetDescriptor:
+        pass
+
+class YAMLLoader(DescriptorLoader):
+    def __init__(self, yaml_file, basepath=None) -> None:
         """
         Loads a DatasetDescriptor object from a yaml file. Use the static `read` method for convenience.
         :param yaml_file: the yaml serialization to load the descriptor from.
@@ -200,7 +211,7 @@ class YAMLLoader(object):
         self.yaml_file = yaml_file
         self.basepath = basepath
 
-    def get_dataset(self):
+    def get_dataset(self) -> DatasetDescriptor:
         data = yaml.load(open(self.yaml_file, 'r'), Loader=Loader)
         if self.basepath is not None:
             basepath = self.basepath
@@ -231,3 +242,35 @@ class YAMLLoader(object):
     @staticmethod
     def read(yaml_file, basepath=None):
         return YAMLLoader(yaml_file, basepath=basepath).get_dataset()
+
+
+class DirectoryLoader(DescriptorLoader):
+    def __init__(self, dataset_path:str) -> None:
+        self.dataset_dir = pathlib.Path(dataset_path)
+        if not self.dataset_dir.is_dir():
+            raise ValueError("Dataset path #{0}' is not a valid path!".format(dataset_path))
+
+    def get_dataset(self) -> DatasetDescriptor:
+        name = self.dataset_dir.name
+        version = "undefined"
+        dataset = DatasetDescriptor(name=name, version=version, basepath=str(self.dataset_dir))
+
+        subsets = ["train", "val", "test"]
+        for subset in subsets:
+            subset_dir = self.dataset_dir / subset
+            if subset_dir.is_dir():
+                log.info(f"Loading subset '{subset}'")
+                categories = list()
+                for class_dir in subset_dir.iterdir():
+                    if class_dir.is_dir():
+                        categories.append(class_dir.name)
+
+                for category in tqdm(categories):
+                    fnames = [p.resolve() for p in pathlib.Path(subset_dir / category).glob("**/*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"}]
+                    dataset.add_labeled_images(subset=subset, category=category, fnames=fnames)
+
+        return dataset
+
+    @staticmethod
+    def load(dataset_dir):
+        return DirectoryLoader(dataset_dir).get_dataset()
