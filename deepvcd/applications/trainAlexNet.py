@@ -150,8 +150,10 @@ def _main(dataset_descriptor: str,
     callbacks.append(early_stop_cb)
 
     if checkpoints_dest is not None:
-        model_checkpoints_cb = ModelCheckpoint(filepath=os.path.join(checkpoints_dest, "AlexNetFlat.{epoch:02d}-{val_loss:.2f}.hdf5")
-                                               monitor='val_loss',
+        #FIXME: make configurable
+        monitor="val_loss"
+        model_checkpoints_cb = ModelCheckpoint(filepath=os.path.join(checkpoints_dest, "AlexNetFlat.epoch-{{epoch:02d}}_{label}-{{{monitor}:.2f}}.hdf5".format(label=monitor.replace('_',''), monitor=monitor)),
+                                               monitor=monitor,
                                                verbose=0,
                                                save_best_only=True,
                                                save_weights_only=True,
@@ -244,6 +246,6 @@ if __name__ == '__main__':
           norm=None if args.norm.lower()=="none" else args.norm,
           input_size=args.input_size,
           max_epochs=args.epochs,
-          checkpoints=args.checkpoints,
+          checkpoints_dest=args.checkpoints,
           seed=args.seed,
           model_weights_fname=args.model_dest)
