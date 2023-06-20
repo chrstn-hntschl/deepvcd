@@ -26,6 +26,7 @@ AUTOTUNE = tf.data.AUTOTUNE
 def train_alexnet(train_ds,
                   num_classes,
                   norm="lrn",
+                  metric="accuracy", 
                   input_size=227,
                   val_ds=None,
                   max_epochs=90,
@@ -46,7 +47,7 @@ def train_alexnet(train_ds,
     #optimizer = "adam"
     loss = losses.categorical_crossentropy
     #loss = losses.sparse_categorical_crossentropy
-    metrics = ['accuracy']  # FIXME: make this configurable, add mAP
+    metrics = [metric]
     model.compile(
         optimizer=optimizer,
         loss=loss,
@@ -172,6 +173,7 @@ def _main(dataset_descriptor: str,
     alexnet, history = train_alexnet(train_ds=train_ds,
                                      num_classes=num_classes,
                                      norm=norm,
+                                     metric=monitor,
                                      input_size=input_size,
                                      val_ds=val_ds,
                                      max_epochs=max_epochs,
