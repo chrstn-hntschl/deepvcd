@@ -77,6 +77,7 @@ def _main(dataset_descriptor: str,
           norm: str="lrn",
           input_size: int=227,
           max_epochs: int=90,
+          monitor: str="accuracy",
           checkpoints_dest: str=None,
           seed=None,
           model_weights_fname: str = None
@@ -131,8 +132,9 @@ def _main(dataset_descriptor: str,
 
     callbacks = []
 
+    _monitor = monitor if not val_ds else f"val_{monitor}"
     # Krizhevsky2012: "divide the learning rate by 10 when the validation error rate stopped improving"
-    reduce_lr_cb = ReduceLROnPlateau(monitor='accuracy' if not val_ds else 'val_accuracy',
+    reduce_lr_cb = ReduceLROnPlateau(_monitor,
                                      mode='auto',
                                      factor=0.1,  # divide by 10
                                      patience=5,
@@ -143,7 +145,7 @@ def _main(dataset_descriptor: str,
     callbacks.append(reduce_lr_cb)
 
     # stop training if no more improvement
-    early_stop_cb = EarlyStopping(monitor='accuracy' if not val_ds else 'val_accuracy',
+    early_stop_cb = EarlyStopping(_monitor,
                                   mode='auto',
                                   min_delta=0.0,
                                   patience=16,
@@ -155,10 +157,8 @@ def _main(dataset_descriptor: str,
     callbacks.append(early_stop_cb)
 
     if checkpoints_dest is not None:
-        #FIXME: make configurable
-        monitor="val_loss"
-        model_checkpoints_cb = ModelCheckpoint(filepath=os.path.join(checkpoints_dest, "AlexNetFlat.epoch-{{epoch:02d}}_{label}-{{{monitor}:.2f}}.hdf5".format(label=monitor.replace('_',''), monitor=monitor)),
-                                               monitor=monitor,
+        model_checkpoints_cb = ModelCheckpoint(filepath=os.path.join(checkpoints_dest, "AlexNetFlat.epoch-{{epoch:02d}}_{label}-{{{monitor}:.2f}}.hdf5".format(label=_monitor.replace('_',''), monitor=_monitor)),
+                                               monitor=_monitor,
                                                verbose=0,
                                                save_best_only=True,
                                                save_weights_only=True,
@@ -208,28 +208,34 @@ if __name__ == '__main__':
     log.info("Keras version: {ver}".format(ver=keras.__version__))
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-n', '--norm',
-                        dest='norm',
+    parser.add_argument("-n", "--norm",
+                        dest="norm",
                         type=str,
                         help="Normalization to be used after first and second convolutional layer ('lrn' (default), 'tflrn', 'batch' or None)",
                         default="lrn",
                         required=False)
-    parser.add_argument('-i', '--input_size',
-                        dest='input_size',
+    parser.add_argument("-i", "--input_size",
+                        dest="input_size",
                         type=int,
                         help="Input image size. 224 and 227 (default) are supported. 224 will result in padding.",
                         default=227,
                         required=False)
-    parser.add_argument('-s', '--seed', dest='seed', 
+    parser.add_argument("-s", "--seed", dest="seed", 
                         type=int, 
-                        help='Set the random seed', 
+                        help="Set the random seed.", 
                         default=None,
                         required=False)
-    parser.add_argument('-e', '--epochs',
-                        dest='epochs',
+    parser.add_argument("-e", "--epochs",
+                        dest="epochs",
                         type=int,
-                        help='Train for x epochs',
+                        help="Train for x epochs",
                         default=200,
+                        required=False)
+    parser.add_argument("-m", "--monitor",
+                        dest="monitor",
+                        type=str,
+                        help="Metric to be used for monitoring validation data improvements during training (default: accuracy).",
+                        default="accuracy",
                         required=False)
     parser.add_argument("-c", "--checkpoints_dest",
                         dest="checkpoints",
@@ -237,13 +243,13 @@ if __name__ == '__main__':
                         help="Path to checkpoints directory. If set, incremental model improvements are stored during training.",
                         default=None,
                         required=False)
-    parser.add_argument('dataset',
+    parser.add_argument("dataset",
                         type=str,
-                        help='Path to dataset descriptor yaml or directory following a dataset structure (see documentation).',
+                        help="Path to dataset descriptor yaml or directory following a dataset structure (see documentation).",
                         default=None)
-    parser.add_argument('model_dest',
+    parser.add_argument("model_dest",
                         type=str,
-                        help='Path to final model file.',
+                        help="Path to final model file.",
                         default=None)
     args = parser.parse_args()
 
@@ -251,6 +257,7 @@ if __name__ == '__main__':
           norm=None if args.norm.lower()=="none" else args.norm,
           input_size=args.input_size,
           max_epochs=args.epochs,
+          monitor=args.monitor,
           checkpoints_dest=args.checkpoints,
           seed=args.seed,
           model_weights_fname=args.model_dest)
