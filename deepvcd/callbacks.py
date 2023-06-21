@@ -5,8 +5,8 @@ import logging
 
 import numpy as np
 
-import keras.backend as K
-from keras.callbacks import Callback
+import tensorflow.keras.backend as K
+from tensorflow.keras.callbacks import Callback
 
 log = logging.getLogger(__name__)
 

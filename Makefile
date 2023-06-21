@@ -2,7 +2,7 @@ help:
 	@cat Makefile
 
 DOCKER_FILE?=Dockerfile
-TENSORFLOW_VER=2.11.0
+TENSORFLOW_VER=2.4.0
 USER=developer
 GPUS?=cpu # all, GPU_ID or CPU for CPU version of TensorFlow
 DATA?="${HOME}/tmp/data"
@@ -14,7 +14,7 @@ ifeq ($(strip $(GPUS)), cpu)
   DOCKER_FLAGS=
 else
   TF_VER=$(TENSORFLOW_VER)-gpu
-  DOCKER_FLAGS=--gpus '"device=$(GPUS)"'
+  DOCKER_FLAGS=--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=$(GPUS)
 endif
 
 

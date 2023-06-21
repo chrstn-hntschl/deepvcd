@@ -5,16 +5,20 @@ LABEL maintainer="Christian Hentschel < chrstn.hntschl@gmail.com>"
 
 ENV DEBIAN_FRONTEND noninteractive
 
+RUN apt-key del 7fa2af80
+RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
+RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu2004/x86_64/7fa2af80.pub
+
 RUN apt-get update && apt-get install -y \
   tzdata \
   ca-certificates \
   python3 \
   libgoogle-perftools4 \
-  libyaml-cpp0.6 \
+  libyaml-cpp0.5v5\
   python3-yaml \
-  python3-h5py \
   python3-pil \
-  python3-pip && \
+  python3-pip \
+  vim && \
   apt-get clean && \
   rm -rf /var/lib/apt/lists 
 
@@ -24,7 +28,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN pip3 --no-cache-dir install --upgrade pip && apt-get remove --purge -y python3-pip
 
 # installing additional stuff
-RUN pip3 --no-cache-dir install keras-preprocessing==1.1.2 scikit-learn==0.24.2 tensorflow-datasets==4.9.2 protobuf==3.20.3
+RUN pip3 --no-cache-dir install keras-preprocessing==1.1.2 scikit-learn==0.24.2 tensorflow-datasets==4.5.2 protobuf==3.19.6
 
 VOLUME [ "/data" ]
 

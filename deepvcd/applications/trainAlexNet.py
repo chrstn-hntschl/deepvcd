@@ -39,10 +39,10 @@ def train_alexnet(train_ds,
     # Krizhevsky2012: "The learning rate was initialized at 0.01 and reduced three times prior to termination"
     initial_lr = 0.01
     # Krizhevsky2012 use decay=0.0005, this is implemented as kernel_regularizer and bias_regularizer in AlexNet layer (see alexnet.AlexNet.py)
-    decay = None
+    decay = 0.0
     momentum = 0.9  # following Krizhevsky2012
 
-    optimizer = SGD(learning_rate=initial_lr, momentum=momentum, weight_decay=decay, nesterov=False)
+    optimizer = SGD(learning_rate=initial_lr, momentum=momentum, decay=decay, nesterov=False)
     #optimizer = "adam"
     loss = losses.categorical_crossentropy
     #loss = losses.sparse_categorical_crossentropy
@@ -189,7 +189,6 @@ def _main(dataset_descriptor: str,
 
 if __name__ == '__main__':
     import argparse
-    import keras
     import tensorflow as tf
 
     # configure logging
@@ -205,7 +204,7 @@ if __name__ == '__main__':
     log.addHandler(ch)
 
     log.info("Tensorflow version: {ver}".format(ver=tf.__version__))
-    log.info("Keras version: {ver}".format(ver=keras.__version__))
+    log.info("Keras version: {ver}".format(ver=tf.keras.__version__))
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-n', '--norm',

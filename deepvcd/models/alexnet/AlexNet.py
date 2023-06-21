@@ -11,7 +11,7 @@ from tensorflow.keras.initializers import Constant, RandomNormal
 from tensorflow.keras import regularizers
 import tensorflow as tf
 
-from keras.applications import imagenet_utils
+from tensorflow.python.keras.applications import imagenet_utils
 
 from deepvcd.metrics import top_k_error
 from deepvcd.helpers.image import read_image, one_hot
