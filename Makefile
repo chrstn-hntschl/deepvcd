@@ -4,6 +4,8 @@ help:
 DOCKER_FILE?=Dockerfile
 TENSORFLOW_VER=2.11.0
 USER=developer
+UID?=$(shell id -u)
+GID?=$(shell id -g)
 GPUS?=cpu # all, GPU_ID or CPU for CPU version of TensorFlow
 DATA?="${HOME}/tmp/data"
 CHECKPOINTS?="${HOME}/tmp/checkpoints"
@@ -19,7 +21,7 @@ endif
 
 
 _build:
-	docker build -t chrstn_hntschl/deepvcd:tf-$(TF_VER)-$(TAG) --build-arg TF_VER=$(TF_VER) --build-arg USER=$(USER) -f $(DOCKER_FILE) .
+	docker build -t chrstn_hntschl/deepvcd:tf-$(TF_VER)-$(TAG) --build-arg TF_VER=$(TF_VER) --build-arg USER=$(USER) --build-arg UID=$(UID) --build-arg GID=$(GID) -f $(DOCKER_FILE) .
 
 dev: _build 
 	docker run $(DOCKER_FLAGS) --rm -it --memory=300g --memory-swap=300g -v $(CURDIR):/home/$(USER)/deepvcd -v $(DATA):/data/datasets -v $(CHECKPOINTS):/data/checkpoints --workdir /home/$(USER)/deepvcd --env PYTHONPATH=/home/$(USER)/deepvcd chrstn_hntschl/deepvcd:tf-$(TF_VER)-$(TAG) /bin/bash

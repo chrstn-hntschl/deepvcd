@@ -31,7 +31,9 @@ VOLUME [ "/data" ]
 ENV LD_PRELOAD "/usr/lib/x86_64-linux-gnu/libtcmalloc.so.4"
 
 ARG UID=1000
+ENV UID=${UID}
 ARG GID=1000
+ENV GID=${GID}
 ARG USER=developer
 ENV USER=${USER}
 ENV HOME_DIR=/home/${USER}
