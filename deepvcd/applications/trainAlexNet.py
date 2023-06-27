@@ -18,7 +18,7 @@ from deepvcd.dataset.descriptor import YAMLLoader, DirectoryLoader
 
 log = logging.getLogger(__name__)
 
-BATCH_SIZE = 256  # Krizhevsky2012: 128
+BATCH_SIZE = 128  # Krizhevsky2012: 128
 IMG_SIZE = 227
 AUTOTUNE = tf.data.AUTOTUNE
 
