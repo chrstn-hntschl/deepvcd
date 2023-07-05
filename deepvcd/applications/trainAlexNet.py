@@ -135,9 +135,10 @@ def _main(dataset_descriptor: str,
 
     callbacks = []
 
-    #monitor_name = metric if not val_ds else f"val_{metric}"
     metric_cls = getattr(metrics, metric)
     metric_obj = metric_cls(**metric_args)
+    log.debug(f"Using metric '{metric_obj}' for optimization")
+
     # Krizhevsky2012: "divide the learning rate by 10 when the validation error rate stopped improving"
     reduce_lr_cb = ReduceLROnPlateau(monitor="val_"+metric_obj.name,
                                      mode='auto',
@@ -184,7 +185,7 @@ def _main(dataset_descriptor: str,
                                      callbacks=callbacks,
                                      )
     val_loss, val_metric = alexnet.evaluate(val_ds)
-    log.info(f"Final validataion set results: {metric}={val_metric:.4f} (val_loss={val_loss:.4f})")
+    log.info(f"Final validation set results: {metric}={val_metric:.4f} (val_loss={val_loss:.4f})")
 
     if model_weights_fname:
         dest_dir = pathlib.Path(model_weights_fname).parent.absolute()
@@ -275,8 +276,12 @@ if __name__ == '__main__':
     # parse metric_args string to dict:
     metric_args = {}
     if args.metric_args is not None:
-        metric_args = dict([(k,v) for k,v in (pair.split('=') for pair in args.metric_args)])
-        #metric_args = dict((k, ast.literal_eval(v)) for k, v in (pair.split('=') for pair in args.metric_args))
+        def eval_args_type(s):
+            try:
+                return ast.literal_eval(s)
+            except:
+                return s
+        metric_args = dict((k, eval_args_type(v)) for k, v in (pair.split('=') for pair in args.metric_args))
 
     _main(dataset_descriptor=args.dataset,
           norm=None if args.norm.lower()=="none" else args.norm,
