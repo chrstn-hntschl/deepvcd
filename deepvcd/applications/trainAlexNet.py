@@ -3,11 +3,13 @@ import logging
 import os
 import pathlib
 import json
+import ast
 
 import tensorflow as tf
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
 from tensorflow.keras import losses
+from tensorflow.keras import metrics
 
 from deepvcd.helpers.image import read_image, one_hot
 from deepvcd.callbacks import NumpyEncoder
@@ -26,6 +28,7 @@ AUTOTUNE = tf.data.AUTOTUNE
 def train_alexnet(train_ds,
                   num_classes,
                   norm="lrn",
+                  metric="CategoricalAccuracy", 
                   input_size=227,
                   val_ds=None,
                   max_epochs=90,
@@ -43,10 +46,9 @@ def train_alexnet(train_ds,
     momentum = 0.9  # following Krizhevsky2012
 
     optimizer = SGD(learning_rate=initial_lr, momentum=momentum, weight_decay=decay, nesterov=False)
-    #optimizer = "adam"
     loss = losses.categorical_crossentropy
-    #loss = losses.sparse_categorical_crossentropy
-    metrics = ['accuracy']  # FIXME: make this configurable, add mAP
+    metrics = [metric]
+
     model.compile(
         optimizer=optimizer,
         loss=loss,
@@ -77,6 +79,8 @@ def _main(dataset_descriptor: str,
           norm: str="lrn",
           input_size: int=227,
           max_epochs: int=90,
+          metric: str="CategoricalAccuracy",
+          metric_args: dict={},
           checkpoints_dest: str=None,
           seed=None,
           model_weights_fname: str = None
@@ -131,19 +135,23 @@ def _main(dataset_descriptor: str,
 
     callbacks = []
 
+    metric_cls = getattr(metrics, metric)
+    metric_obj = metric_cls(**metric_args)
+    log.debug(f"Using metric '{metric_obj}' for optimization")
+
     # Krizhevsky2012: "divide the learning rate by 10 when the validation error rate stopped improving"
-    reduce_lr_cb = ReduceLROnPlateau(monitor='accuracy' if not val_ds else 'val_accuracy',
+    reduce_lr_cb = ReduceLROnPlateau(monitor="val_"+metric_obj.name,
                                      mode='auto',
                                      factor=0.1,  # divide by 10
                                      patience=5,
-                                     min_delta=0.005,
+                                     min_delta=0.001,
                                      cooldown=10,
                                      min_lr=0.00001,  # we reduce lr at max three times
                                      verbose=1)
     callbacks.append(reduce_lr_cb)
 
     # stop training if no more improvement
-    early_stop_cb = EarlyStopping(monitor='accuracy' if not val_ds else 'val_accuracy',
+    early_stop_cb = EarlyStopping(monitor="val_"+metric_obj.name,
                                   mode='auto',
                                   min_delta=0.0,
                                   patience=16,
@@ -155,10 +163,8 @@ def _main(dataset_descriptor: str,
     callbacks.append(early_stop_cb)
 
     if checkpoints_dest is not None:
-        #FIXME: make configurable
-        monitor="val_loss"
-        model_checkpoints_cb = ModelCheckpoint(filepath=os.path.join(checkpoints_dest, "AlexNetFlat.epoch-{{epoch:02d}}_{label}-{{{monitor}:.2f}}.hdf5".format(label=monitor.replace('_',''), monitor=monitor)),
-                                               monitor=monitor,
+        model_checkpoints_cb = ModelCheckpoint(filepath=os.path.join(checkpoints_dest, "AlexNetFlat.epoch-{{epoch:02d}}_{label}-{{{monitor}:.2f}}.hdf5".format(label=metric_obj.name.replace('_',''), monitor="val_"+metric_obj.name)),
+                                               monitor="val_"+metric_obj.name,
                                                verbose=0,
                                                save_best_only=True,
                                                save_weights_only=True,
@@ -172,11 +178,15 @@ def _main(dataset_descriptor: str,
     alexnet, history = train_alexnet(train_ds=train_ds,
                                      num_classes=num_classes,
                                      norm=norm,
+                                     metric=metric_obj,
                                      input_size=input_size,
                                      val_ds=val_ds,
                                      max_epochs=max_epochs,
                                      callbacks=callbacks,
                                      )
+    val_loss, val_metric = alexnet.evaluate(val_ds)
+    log.info(f"Final validation set results: {metric}={val_metric:.4f} (val_loss={val_loss:.4f})")
+
     if model_weights_fname:
         dest_dir = pathlib.Path(model_weights_fname).parent.absolute()
         if not dest_dir.exists():
@@ -208,49 +218,77 @@ if __name__ == '__main__':
     log.info("Keras version: {ver}".format(ver=keras.__version__))
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-n', '--norm',
-                        dest='norm',
+    parser.add_argument("-n", "--norm",
+                        dest="norm",
                         type=str,
                         help="Normalization to be used after first and second convolutional layer ('lrn' (default), 'tflrn', 'batch' or None)",
                         default="lrn",
                         required=False)
-    parser.add_argument('-i', '--input_size',
-                        dest='input_size',
+    parser.add_argument("-i", "--input_size",
+                        dest="input_size",
                         type=int,
                         help="Input image size. 224 and 227 (default) are supported. 224 will result in padding.",
                         default=227,
                         required=False)
-    parser.add_argument('-s', '--seed', dest='seed', 
+    parser.add_argument("-s", "--seed", dest="seed", 
                         type=int, 
-                        help='Set the random seed', 
+                        help="Set the random seed.", 
                         default=None,
                         required=False)
-    parser.add_argument('-e', '--epochs',
-                        dest='epochs',
+    parser.add_argument("-e", "--epochs",
+                        dest="epochs",
                         type=int,
-                        help='Train for x epochs',
+                        help="Train for x epochs",
                         default=200,
                         required=False)
+    parser.add_argument("-m", "--metric",
+                        dest="metric",
+                        type=str,
+                        help="Metric to be used for monitoring validation data improvements during training (default: CategoricalAccuracy).",
+                        default="CategoricalAccuracy",
+                        required=False)
+    parser.add_argument("--metric_args",
+                        dest="metric_args",
+                        help="",
+                        type=str,
+                        nargs='*',
+                        default=None)
     parser.add_argument("-c", "--checkpoints_dest",
                         dest="checkpoints",
                         type=str,
                         help="Path to checkpoints directory. If set, incremental model improvements are stored during training.",
                         default=None,
                         required=False)
-    parser.add_argument('dataset',
+    parser.add_argument("-d", "--dataset",
+                        dest="dataset",
                         type=str,
-                        help='Path to dataset descriptor yaml or directory following a dataset structure (see documentation).',
-                        default=None)
-    parser.add_argument('model_dest',
+                        help="Path to dataset descriptor yaml or directory following a dataset structure (see documentation).",
+                        default=None,
+                        required=True)
+    parser.add_argument("-w", "--weights",
+                        dest="weights",
                         type=str,
-                        help='Path to final model file.',
-                        default=None)
+                        help="Path to hdf5 file for storing optimized model weights after training.",
+                        default=None,
+                        required=True)
     args = parser.parse_args()
+
+    # parse metric_args string to dict:
+    metric_args = {}
+    if args.metric_args is not None:
+        def eval_args_type(s):
+            try:
+                return ast.literal_eval(s)
+            except:
+                return s
+        metric_args = dict((k, eval_args_type(v)) for k, v in (pair.split('=') for pair in args.metric_args))
 
     _main(dataset_descriptor=args.dataset,
           norm=None if args.norm.lower()=="none" else args.norm,
           input_size=args.input_size,
           max_epochs=args.epochs,
+          metric=args.metric,
+          metric_args=metric_args,
           checkpoints_dest=args.checkpoints,
           seed=args.seed,
-          model_weights_fname=args.model_dest)
+          model_weights_fname=args.weights)
