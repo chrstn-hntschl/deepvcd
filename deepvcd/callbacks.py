@@ -5,10 +5,24 @@ import logging
 
 import numpy as np
 
-import keras.backend as K
-from keras.callbacks import Callback
+import tensorflow.keras.backend as K
+from tensorflow.keras.callbacks import Callback
+from tensorflow.keras import metrics
 
 log = logging.getLogger(__name__)
+
+
+callback_mode_for_metric = {
+    getattr(metrics, "Accuracy"): "max",
+    getattr(metrics, "BinaryAccuracy"): "max",
+    getattr(metrics, "CategoricalAccuracy"): "max",
+    getattr(metrics, "TopKCategoricalAccuracy"): "max",
+    getattr(metrics, "AUC"): "max",
+    getattr(metrics, "Precision"): "max",
+    getattr(metrics, "PrecisionAtRecall"): "max",
+    getattr(metrics, "Recall"): "max",
+    getattr(metrics, "RecallAtPrecision"): "max"
+}
 
 
 class StepLearningRate(Callback):

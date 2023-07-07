@@ -12,7 +12,7 @@ from tensorflow.keras import losses
 from tensorflow.keras import metrics
 
 from deepvcd.helpers.image import read_image, one_hot
-from deepvcd.callbacks import NumpyEncoder
+from deepvcd.callbacks import NumpyEncoder, callback_mode_for_metric
 import deepvcd.models.alexnet
 from deepvcd.models.alexnet.AlexNet import preprocess_train, preprocess_predict
 from deepvcd.dataset.descriptor import YAMLLoader, DirectoryLoader
@@ -135,13 +135,13 @@ def _main(dataset_descriptor: str,
 
     callbacks = []
 
-    metric_cls = getattr(metrics, metric)
-    metric_obj = metric_cls(**metric_args)
+    metric_obj = metrics.get({"class_name": metric,
+                              "config": metric_args})
     log.debug(f"Using metric '{metric_obj}' for optimization")
 
     # Krizhevsky2012: "divide the learning rate by 10 when the validation error rate stopped improving"
     reduce_lr_cb = ReduceLROnPlateau(monitor="val_"+metric_obj.name,
-                                     mode='auto',
+                                     mode=callback_mode_for_metric.get(type(metric_obj)),
                                      factor=0.1,  # divide by 10
                                      patience=5,
                                      min_delta=0.001,
@@ -152,7 +152,7 @@ def _main(dataset_descriptor: str,
 
     # stop training if no more improvement
     early_stop_cb = EarlyStopping(monitor="val_"+metric_obj.name,
-                                  mode='auto',
+                                  mode=callback_mode_for_metric.get(type(metric_obj)),
                                   min_delta=0.0,
                                   patience=16,
                                   verbose=1,
@@ -168,7 +168,7 @@ def _main(dataset_descriptor: str,
                                                verbose=0,
                                                save_best_only=True,
                                                save_weights_only=True,
-                                               mode='auto',
+                                               mode=callback_mode_for_metric.get(type(metric_obj)),
                                                save_freq='epoch',
                                                options=None,
                                                initial_value_threshold=None
