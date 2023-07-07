@@ -144,8 +144,7 @@ def _main(dataset_descriptor: str,
                                      mode=callback_mode_for_metric.get(type(metric_obj)),
                                      factor=0.1,  # divide by 10
                                      patience=5,
-                                     min_delta=0.001,
-                                     cooldown=10,
+                                     min_delta=0.0,
                                      min_lr=0.00001,  # we reduce lr at max three times
                                      verbose=1)
     callbacks.append(reduce_lr_cb)
@@ -154,7 +153,7 @@ def _main(dataset_descriptor: str,
     early_stop_cb = EarlyStopping(monitor="val_"+metric_obj.name,
                                   mode=callback_mode_for_metric.get(type(metric_obj)),
                                   min_delta=0.0,
-                                  patience=16,
+                                  patience=6,
                                   verbose=1,
                                   baseline=None,
                                   restore_best_weights=True  # after training, use model weights of
