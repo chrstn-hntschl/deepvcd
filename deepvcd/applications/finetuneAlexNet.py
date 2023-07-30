@@ -5,7 +5,6 @@ import os
 import functools
 
 import tensorflow
-from tensorflow.keras.utils.data_utils import validate_file, get_file
 from tensorflow.keras.models import Model, Sequential, load_model
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.initializers import Constant, RandomNormal
@@ -13,8 +12,11 @@ from tensorflow.keras import regularizers
 from tensorflow.keras.callbacks import LearningRateScheduler, ReduceLROnPlateau, EarlyStopping
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras import losses
+from tensorflow.keras.metrics import AUC
 
-from deepvcd.models.alexnet import AlexNetFlat, preprocess_train, preprocess_predict, WEIGHTS_FLAT_URL, WEIGHTS_FLAT_SHA256
+from keras.utils.data_utils import validate_file, get_file
+
+from deepvcd.models.alexnet.AlexNet  import AlexNetFlat, preprocess_train, preprocess_predict, WEIGHTS_FLAT_URL, WEIGHTS_FLAT_SHA256
 from deepvcd.models.utils import get_layer_index
 from deepvcd.dataset.descriptor import YAMLLoader, DirectoryLoader
 from deepvcd.helpers.image import read_image, one_hot
@@ -81,7 +83,12 @@ def setup_model(top_model, chop_off_layer:str='dense_3', weights:str='imagenet',
     return model
 
 
-def trainAlexNet(dataset_descriptor:str, seed=None):
+def trainAlexNet(dataset_descriptor:str, norm:str="lrn", model_weights:str="imagenet", seed=None):
+    initial_lr_rt=0.01
+    max_epochs_rt=90
+    lr_ft=0.001
+    max_epochs_ft=90
+    start_ft_layer="conv_1"
     if seed is None:
         from datetime import datetime
         seed = datetime.now().microsecond
@@ -125,7 +132,7 @@ def trainAlexNet(dataset_descriptor:str, seed=None):
     num_bottleneck_units = 128
     retrain_layer_prefix="rt_"
     top_model = create_bottleneck_features(num_classes=num_classes, num_units=num_bottleneck_units, layer_prefix=retrain_layer_prefix)
-    model = setup_model(top_model=top_model, chop_off_layer=chop_off_layer,  weights='imagenet', name='AlexNetFlat-ft')
+    model = setup_model(top_model=top_model, chop_off_layer=chop_off_layer,  weights=model_weights, name='AlexNetFlat-ft', norm=norm)
 
     # 1.) retrain only newly added layers from scratch:
     # set all layers except new layers to not trainable:
@@ -137,9 +144,9 @@ def trainAlexNet(dataset_descriptor:str, seed=None):
 
     decay = 0.0
     momentum = 0.9
-    optimizer = SGD(learning_rate=initial_lr_rt, momentum=momentum, decay=decay, nesterov=False)
+    optimizer = SGD(learning_rate=initial_lr_rt, momentum=momentum, weight_decay=decay, nesterov=False)
     loss = losses.categorical_crossentropy
-    metrics = ["CategoricalAccuracy"]
+    metrics = ["CategoricalAccuracy", AUC(curve="PR", multi_label=True, name="mAP")]
     model.compile(optimizer=optimizer,
                   loss=loss,
                   metrics=metrics,
@@ -150,11 +157,31 @@ def trainAlexNet(dataset_descriptor:str, seed=None):
                   )
     
     # retraining layers:
-    def lr_scheduler(epoch, cur_lr, schedule):
-        return schedule[epoch]
-    callbacks = [
-        LearningRateScheduler(schedule=functools.partial(lr_scheduler, schedule=lr_schedule_rt), verbose=1)
-    ]
+    callbacks =list()
+    #def lr_scheduler(epoch, cur_lr, schedule):
+    #    return schedule[epoch]
+    #lr_schedule_cb = LearningRateScheduler(schedule=functools.partial(lr_scheduler, schedule=lr_schedule_rt), verbose=1)
+    reduce_lr_cb = ReduceLROnPlateau(monitor="val_categorical_accuracy",
+                                     mode="max",
+                                     factor=0.1,  # divide by 10
+                                     patience=5,
+                                     cooldown=5,
+                                     min_delta=0.0,
+                                     min_lr=0.00001,  # we reduce lr at max three times
+                                     verbose=1)
+    callbacks.append(reduce_lr_cb)
+
+    # stop training if no more improvement
+    early_stop_cb = EarlyStopping(monitor="val_categorical_accuracy",
+                                  mode="max",
+                                  min_delta=0.0,
+                                  patience=11,
+                                  verbose=1,
+                                  baseline=None,
+                                  restore_best_weights=True  # after training, use model weights of
+                                                              # best performing epoch
+                                  )
+    callbacks.append(early_stop_cb)
 
     log.debug("Retraining all layers with layer name equals '{rt_prefix}*'".format(rt_prefix=retrain_layer_prefix))
     history_rt = model.fit(x=train_ds,
@@ -164,10 +191,12 @@ def trainAlexNet(dataset_descriptor:str, seed=None):
                            validation_data=val_ds,
                            class_weight=None,
                            )
-    scores, gt = predict(model=model, testset_iter=val_ds, preprocessing_func='default')
+    val_loss_rt, val_metric_rt, val_mAP_rt = model.evaluate(val_ds)
+    log.info(f"Validation set results after retraining: val_categorical_accuracy={val_metric_rt:.4f} (val_loss={val_loss_rt:.4f})")
+    #scores, gt = predict(model=model, testset_iter=val_ds, preprocessing_func='default')
 
     # 2.) fine-tune all/other layers with small learning rate:
-    log.debug("Fine-tuning all layers with small learning rate (lr={lr})".format(lr=lr))
+    log.debug(f"Fine-tuning all layers with small learning rate (lr={lr_ft}")
     if start_ft_layer is None:
         set_trainable = True
     else:
@@ -183,9 +212,9 @@ def trainAlexNet(dataset_descriptor:str, seed=None):
 
     decay = 0.0
     momentum = 0.9
-    optimizer = SGD(learning_rate=lr_ft, momentum=momentum, decay=decay, nesterov=False)
+    optimizer = SGD(learning_rate=lr_ft, momentum=momentum, weight_decay=decay, nesterov=False)
     loss = losses.categorical_crossentropy
-    metrics = ["CategoricalAccuracy"]
+    metrics = ["CategoricalAccuracy", AUC(curve="PR", multi_label=True, name="mAP")]
     model.compile(optimizer=optimizer,
                   loss=loss,
                   metrics=metrics,
@@ -195,27 +224,98 @@ def trainAlexNet(dataset_descriptor:str, seed=None):
                   target_tensors=None
                   )
 
+    callbacks =list()
+    #def lr_scheduler(epoch, cur_lr, schedule):
+    #    return schedule[epoch]
+    #lr_schedule_cb = LearningRateScheduler(schedule=functools.partial(lr_scheduler, schedule=lr_schedule_rt), verbose=1)
+    reduce_lr_cb = ReduceLROnPlateau(monitor="val_categorical_accuracy",
+                                     mode="max",
+                                     factor=0.1,  # divide by 10
+                                     patience=5,
+                                     cooldown=5,
+                                     min_delta=0.0,
+                                     min_lr=0.00001,  # we reduce lr at max three times
+                                     verbose=1)
+    callbacks.append(reduce_lr_cb)
+
+    # stop training if no more improvement
+    early_stop_cb = EarlyStopping(monitor="val_categorical_accuracy",
+                                  mode="max",
+                                  min_delta=0.0,
+                                  patience=11,
+                                  verbose=1,
+                                  baseline=None,
+                                  restore_best_weights=True  # after training, use model weights of
+                                                              # best performing epoch
+                                  )
+    callbacks.append(early_stop_cb)
     history_ft = model.fit(x=train_ds,
                            epochs=max_epochs_ft,
                            verbose=1,
-                           callbacks=[],
+                           callbacks=callbacks,
                            validation_data=val_ds,
                            class_weight=None
                            )
-    
-    scores, gt = predict(model=model, testset_iter=val_ds, preprocessing_func='default')
+    val_loss_ft, val_metric_ft, val_mAP_ft = model.evaluate(val_ds)
+    log.info(f"Validation set results after fine-tuning: val_categorical_accuracy={val_metric_ft:.4f} (val_loss={val_loss_ft:.4f})")
 
-    if callable(metrics):
-        metrics_ft = metrics(gt, scores)
-    else:
-        metrics_ft = dict()
-        log.debug("Results for fine-tuning {model} on {dataset}:".format(model=model.name,
-                                                                         dataset=os.path.basename(descr_fname)))
-        for m in metrics:
-            metrics_ft[m] = metrics[m](gt, scores)
-            log.debug("\t{metric}={val}".format(metric=m, val=metrics_ft[m]))
+    log.info(f"val_categorical_accuracy={val_mAP_ft:.4f} ({val_mAP_rt:.4f})")
+    #scores, gt = predict(model=model, testset_iter=val_ds, preprocessing_func='default')
 
-    return metrics_rt, metrics_ft
+    #if callable(metrics):
+    #    metrics_ft = metrics(gt, scores)
+    #else:
+    #    metrics_ft = dict()
+    #    log.debug("Results for fine-tuning {model} on {dataset}:".format(model=model.name,
+    #                                                                     dataset=os.path.basename(descr_fname)))
+    #    for m in metrics:
+    #        metrics_ft[m] = metrics[m](gt, scores)
+    #        log.debug("\t{metric}={val}".format(metric=m, val=metrics_ft[m]))
+
+    #return metrics_rt, metrics_ft
 
 
+if __name__ == "__main__":
+    import argparse
 
+    # configure logging
+    log.setLevel(logging.DEBUG)
+    # create console handler and set level to debug
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    # create formatter
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')                                                                                     # add formatter to ch
+    ch.setFormatter(formatter)
+    # add ch to logger
+    log.addHandler(ch)
+
+    log.info("Tensorflow version: {ver}".format(ver=tensorflow.__version__))
+    log.info("Keras version: {ver}".format(ver=tensorflow.keras.__version__))
+
+    #FIXME: set parameters: initial_lr_rt, lr_ft, max_epochs_rt, max_epochs_ft
+    #FIXME: model hyperparameters (learning rate schedule, finetuning layer, chop-off layer) are hard-coded or optimized using test data!
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-n", "--norm",
+                        dest="norm",
+                        type=str,
+                        help="Normalization to be used after first and second convolutional layer ('lrn' (default), 'tflrn', 'batch' or None)",
+                        default="lrn",
+                        required=False)
+    parser.add_argument("-d", "--dataset",
+                        dest="dataset",
+                        type=str,
+                        help="Path to dataset descriptor yaml or directory following a dataset structure (see documentation).",
+                        default=None,
+                        required=True)
+    parser.add_argument("-w", "--weights",
+                        dest="weights",
+                        type=str,
+                        help="Path to hdf5 file with pretrained model weights. If none given, ImageNet weights are loaded.",
+                        default="imagenet",
+                        required=False)
+    args = parser.parse_args()
+    trainAlexNet(dataset_descriptor=args.dataset, 
+                 norm=None if args.norm.lower()=="none" else args.norm,
+                 model_weights=args.weights, 
+                 seed=None)
