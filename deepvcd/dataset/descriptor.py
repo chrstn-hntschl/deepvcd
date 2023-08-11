@@ -4,6 +4,7 @@ import pathlib
 import numpy as np
 import random
 import logging
+import json
 from abc import ABC, abstractmethod
 
 import yaml
@@ -256,15 +257,23 @@ class DirectoryLoader(DescriptorLoader):
         dataset = DatasetDescriptor(name=name, version=version, basepath=str(self.dataset_dir))
 
         subsets = ["train", "val", "test"]
+        concepts_file = self.dataset_dir / "concepts.json"
+        if concepts_file.exists():
+            categories = json.load(open(concepts_file, 'r'))
+            log.info(f"Loading concept names from concepts file.")
+        else:
+            train_dir = self.dataset_dir / "train"
+            log.info(f"Loading concept names from sub directories in (mandatory) 'train' directory.")
+            categories = list()
+            for class_dir in train_dir.iterdir():
+                if class_dir.is_dir():
+                    categories.append(class_dir.name)
+        log.info(f"Found {len(categories)} concepts in dataset.")
+
         for subset in subsets:
             subset_dir = self.dataset_dir / subset
             if subset_dir.is_dir():
                 log.info(f"Loading subset '{subset}'")
-                categories = list()
-                for class_dir in subset_dir.iterdir():
-                    if class_dir.is_dir():
-                        categories.append(class_dir.name)
-
                 for category in tqdm(categories):
                     fnames = [p.resolve() for p in pathlib.Path(subset_dir / category).glob("**/*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"}]
                     dataset.add_labeled_images(subset=subset, category=category, fnames=fnames)
