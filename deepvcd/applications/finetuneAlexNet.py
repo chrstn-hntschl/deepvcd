@@ -82,8 +82,30 @@ def setup_model(top_model, chop_off_layer:str='dense_3', weights:str='imagenet',
 
     return model
 
+def train(model, train_dataset, validation_dataset, inital_lr:float, callbacks:list, max_epochs:int):
+    decay = 0.0
+    momentum = 0.9
+    optimizer = SGD(learning_rate=initial_lr, momentum=momentum, weight_decay=decay, nesterov=False)
+    loss = losses.categorical_crossentropy
+    metrics = ["CategoricalAccuracy", AUC(curve="PR", multi_label=True, name="mAP")]
+    model.compile(optimizer=optimizer,
+                  loss=loss,
+                  metrics=metrics,
+                  loss_weights=None,
+                  sample_weight_mode=None,
+                  weighted_metrics=None,
+                  target_tensors=None
+                  )
+    history = model.fit(x=train_dataset,
+                           epochs=max_epochss,
+                           verbose=1,
+                           callbacks=callbacks,
+                           validation_data=validation_dataset,
+                           class_weight=None,
+                           )
+    return model, history
 
-def trainAlexNet(dataset_descriptor:str, norm:str="lrn", model_weights:str="imagenet", seed=None):
+def retrain_and_finetune(dataset_descriptor:str, norm:str="lrn", model_weights:str="imagenet", seed=None):
     initial_lr_rt=0.01
     max_epochs_rt=90
     lr_ft=0.001
@@ -141,20 +163,6 @@ def trainAlexNet(dataset_descriptor:str, norm:str="lrn", model_weights:str="imag
             layer.trainable = True
         else:
             layer.trainable = False
-
-    decay = 0.0
-    momentum = 0.9
-    optimizer = SGD(learning_rate=initial_lr_rt, momentum=momentum, weight_decay=decay, nesterov=False)
-    loss = losses.categorical_crossentropy
-    metrics = ["CategoricalAccuracy", AUC(curve="PR", multi_label=True, name="mAP")]
-    model.compile(optimizer=optimizer,
-                  loss=loss,
-                  metrics=metrics,
-                  loss_weights=None,
-                  sample_weight_mode=None,
-                  weighted_metrics=None,
-                  target_tensors=None
-                  )
     
     # retraining layers:
     callbacks =list()
@@ -184,13 +192,13 @@ def trainAlexNet(dataset_descriptor:str, norm:str="lrn", model_weights:str="imag
     callbacks.append(early_stop_cb)
 
     log.debug("Retraining all layers with layer name equals '{rt_prefix}*'".format(rt_prefix=retrain_layer_prefix))
-    history_rt = model.fit(x=train_ds,
-                           epochs=max_epochs_rt,
-                           verbose=1,
-                           callbacks=callbacks,
-                           validation_data=val_ds,
-                           class_weight=None,
-                           )
+    model, history_rt = train(model=model,
+                                train_dataset=train_ds,
+                                validation_dataset=val_ds,
+                                initial_lr=initial_lr_rt,
+                                callbacks=callbacks,
+                                max_epochs=max_epochs_rt)
+
     val_loss_rt, val_metric_rt, val_mAP_rt = model.evaluate(val_ds)
     log.info(f"Validation set results after retraining: val_categorical_accuracy={val_metric_rt:.4f} (val_loss={val_loss_rt:.4f})")
     #scores, gt = predict(model=model, testset_iter=val_ds, preprocessing_func='default')
@@ -209,20 +217,6 @@ def trainAlexNet(dataset_descriptor:str, norm:str="lrn", model_weights:str="imag
             layer.trainable = True
         else:
             layer.trainable = False
-
-    decay = 0.0
-    momentum = 0.9
-    optimizer = SGD(learning_rate=lr_ft, momentum=momentum, weight_decay=decay, nesterov=False)
-    loss = losses.categorical_crossentropy
-    metrics = ["CategoricalAccuracy", AUC(curve="PR", multi_label=True, name="mAP")]
-    model.compile(optimizer=optimizer,
-                  loss=loss,
-                  metrics=metrics,
-                  loss_weights=None,
-                  sample_weight_mode=None,
-                  weighted_metrics=None,
-                  target_tensors=None
-                  )
 
     callbacks =list()
     #def lr_scheduler(epoch, cur_lr, schedule):
@@ -249,13 +243,13 @@ def trainAlexNet(dataset_descriptor:str, norm:str="lrn", model_weights:str="imag
                                                               # best performing epoch
                                   )
     callbacks.append(early_stop_cb)
-    history_ft = model.fit(x=train_ds,
-                           epochs=max_epochs_ft,
-                           verbose=1,
-                           callbacks=callbacks,
-                           validation_data=val_ds,
-                           class_weight=None
-                           )
+
+    model, history_ft = train(model=model,
+                              train_dataset=train_ds,
+                              validation_dataset=val_ds,
+                              initial_lr=lr_ft,
+                              callbacks=callbacks,
+                              max_epochs=max_epochs_ft)
     val_loss_ft, val_metric_ft, val_mAP_ft = model.evaluate(val_ds)
     log.info(f"Validation set results after fine-tuning: val_categorical_accuracy={val_metric_ft:.4f} (val_loss={val_loss_ft:.4f})")
 
@@ -315,7 +309,7 @@ if __name__ == "__main__":
                         default="imagenet",
                         required=False)
     args = parser.parse_args()
-    trainAlexNet(dataset_descriptor=args.dataset, 
+    retrain_and_finetune(dataset_descriptor=args.dataset, 
                  norm=None if args.norm.lower()=="none" else args.norm,
                  model_weights=args.weights, 
                  seed=None)
