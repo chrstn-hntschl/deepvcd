@@ -6,6 +6,7 @@ import random
 import logging
 import json
 from abc import ABC, abstractmethod
+from typing import List
 
 import yaml
 from tqdm import tqdm
@@ -138,7 +139,7 @@ class DatasetDescriptor(object):
         return tf.data.Dataset.from_tensor_slices((img_file_paths, img_labels)), label_indices
 
 
-def get_cross_val_folds(ds_descriptor, n_folds=4, seed=None):
+def get_cross_val_folds(ds_descriptor:DatasetDescriptor, n_folds:int=4, seed:int=None) -> List[DatasetDescriptor]:
     """
     Splits the train set of the given DatasetDescriptor into `n_folds` cross validation folds.
     Returns n_folds DatasetDescriptors with train and val subsets set according to generated folds.
