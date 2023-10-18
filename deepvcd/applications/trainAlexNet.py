@@ -66,7 +66,7 @@ def train_alexnet(train_ds,
 
     model_history = model.fit(x=train_ds,
                               epochs=max_epochs,
-                              verbose=1,
+                              verbose=2,
                               callbacks=callbacks,
                               validation_data=val_ds,
                               class_weight=class_weight,
@@ -220,7 +220,7 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--norm",
                         dest="norm",
                         type=str,
-                        help="Normalization to be used after first and second convolutional layer ('lrn' (default), 'tflrn', 'batch' or None)",
+                        help="Normalization to be used after first and second convolutional layer ('lrn' (default), 'tflrn', 'batch' or 'none')",
                         default="lrn",
                         required=False)
     parser.add_argument("-i", "--input_size",
