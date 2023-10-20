@@ -352,7 +352,7 @@ def predict(deepvcd_ds, subset="val", weights="imagenet", input_size=227, norm="
 
 
 def _main(cli_args):
-    if cli_args.weights_files == "imagenet":
+    if cli_args.weights_files == "imagenet" or cli_args.weights_files == ["imagenet"]:
          log.info("Using pre-trained ILSVRC2012 weights")
          weights_files = ["imagenet"]
     else:
