@@ -352,7 +352,7 @@ def predict(deepvcd_ds, subset="val", weights="imagenet", input_size=227, norm="
 
 
 def _main(cli_args):
-    if cli_args.weights_files is None:
+    if cli_args.weights_files == "imagenet":
          log.info("Using pre-trained ILSVRC2012 weights")
          weights_files = ["imagenet"]
     else:
@@ -419,11 +419,13 @@ if __name__ == '__main__':
                         default=227,
                         required=False)
     parser.add_argument('-w', '--weights_file', 
-                        dest='weights_files', type=str,
+                        dest='weights_files', 
+                        type=str,
                         nargs='*',
                         help="File with model weights (hdf5). Needs to be compatible with the selected model type. "
-                             "If none selected (default) the pre-trained ILSVRC2012 weights will be used. If multiple "
-                             "files are provided, the returned scores are averages over softmax outputs of each file.",
+                             "If none selected (default) the pre-trained ILSVRC2012 weights (use `lrn` norm, s.a.) will be used. "
+                             "If multiple files are provided, the returned scores are averages over softmax outputs of each file.",
+                        default="imagenet"
                         )
     args = parser.parse_args()
 
