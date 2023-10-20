@@ -340,7 +340,8 @@ def predict(deepvcd_ds, subset="val", weights="imagenet", input_size=227, norm="
             ds_ = ds_.prefetch(buffer_size=tf.data.AUTOTUNE)
 
             log.info("Computing model scores for region '{region} (flipped={flipped})'".format(region=region, flipped=flip))
-            scores = model.predict(x=ds_)
+            scores = model.predict(x=ds_,
+                                   verbose=2)
             if avg_scores is None:
                 avg_scores = scores
             else:

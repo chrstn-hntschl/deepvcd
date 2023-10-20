@@ -183,7 +183,8 @@ def _main(dataset_descriptor: str,
                                      max_epochs=max_epochs,
                                      callbacks=callbacks,
                                      )
-    val_loss, val_metric = alexnet.evaluate(val_ds)
+    val_loss, val_metric = alexnet.evaluate(val_ds,
+                                            verbose=2)
     log.info(f"Final validation set results: {metric}={val_metric:.4f} (val_loss={val_loss:.4f})")
 
     if model_weights_fname:
