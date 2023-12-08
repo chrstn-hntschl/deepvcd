@@ -12,3 +12,4 @@ def get_layer_index(model, layer_name):
     for idx, layer in enumerate(model.layers):
         if layer.name == layer_name:
             return idx
+    raise ValueError(f"No such layer: '{layer_name}'")
