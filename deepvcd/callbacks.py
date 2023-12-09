@@ -81,7 +81,7 @@ class GetBest(Callback):
         self.verbose = verbose
         self.period = period
         self.baseline = baseline
-        self.best_epochs = 0
+        self.best_epoch = 0
         self.epochs_since_last_save = 0
         self.best_weights = None
 
@@ -125,7 +125,7 @@ class GetBest(Callback):
                               % (epoch + 1, self.monitor, self.best,
                                  current))
                     self.best = current
-                    self.best_epochs = epoch + 1
+                    self.best_epoch = epoch + 1
                     self.best_weights = self.model.get_weights()
                 else:
                     if self.verbose > 0:
@@ -134,7 +134,7 @@ class GetBest(Callback):
 
     def on_train_end(self, logs=None):
         if self.verbose > 0:
-            print('Using epoch %05d with %s: %0.5f' % (self.best_epochs, self.monitor,
+            print('Using epoch %05d with %s: %0.5f' % (self.best_epoch, self.monitor,
                                                        self.best))
         self.model.set_weights(self.best_weights)
 
