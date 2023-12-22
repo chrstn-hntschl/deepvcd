@@ -1,4 +1,5 @@
 import os
+from termios import VLNEXT
 import warnings
 import logging
 import numpy as np
@@ -331,7 +332,7 @@ def predict(deepvcd_ds, subset="val", weights="imagenet", input_size=227, norm="
     #ilsvrc2012_mean = [0.48184115, 0.453552, 0.3977624]
     log.debug("Using mean={mean}".format(mean=ilsvrc2012_mean))
 
-    avg_scores = None
+    scores = list()
     for region in regions:
         for flip in [False, True]:
             ds_ = ds.map(lambda x, y: (preprocess_predict(x, mean=ilsvrc2012_mean, crop_region=region, horizontal_flip=flip), y), num_parallel_calls=tf.data.AUTOTUNE)
@@ -340,14 +341,12 @@ def predict(deepvcd_ds, subset="val", weights="imagenet", input_size=227, norm="
             ds_ = ds_.prefetch(buffer_size=tf.data.AUTOTUNE)
 
             log.info("Computing model scores for region '{region} (flipped={flipped})'".format(region=region, flipped=flip))
-            scores = model.predict(x=ds_,
+            scores_ = model.predict(x=ds_,
                                    verbose=2)
-            if avg_scores is None:
-                avg_scores = scores
-            else:
-                avg_scores += scores
+            scores.append(scores_)
 
-    scores = avg_scores / (2 * len(regions))
+    avg_scores = sum(scores)
+    scores = avg_scores / (2 * len(scores))
     return gt, scores
 
 
@@ -365,11 +364,14 @@ def _main(cli_args):
     if pathlib.Path(dataset_descriptor).is_file():
         log.info("Loading dataset from descriptor file '{filename}'".format(filename=dataset_descriptor))
         deepvcd_ds = YAMLLoader.read(yaml_file=dataset_descriptor)
-    if pathlib.Path(dataset_descriptor).is_dir():
+    elif pathlib.Path(dataset_descriptor).is_dir():
         log.info("Loading dataset from directory '{directory}'".format(directory=dataset_descriptor))
         deepvcd_ds = DirectoryLoader.load(dataset_dir=dataset_descriptor)
+    else:
+        raise ValueError(f"No such file or directory: '{dataset_descriptor}'")
 
     scores = None
+    gt = None
     for weights_file in weights_files:
         log.info("Using weights from '{weights_file}'".format(weights_file=weights_file))
         gt, scores_ = predict(norm=None if cli_args.norm.lower()=="none" else cli_args.norm,
