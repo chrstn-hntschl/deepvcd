@@ -361,12 +361,13 @@ def _main(cli_args):
         weights_files=cli_args.weights_files
 
     dataset_descriptor = cli_args.dataset
+    subset = cli_args.subset
     if pathlib.Path(dataset_descriptor).is_file():
         log.info("Loading dataset from descriptor file '{filename}'".format(filename=dataset_descriptor))
         deepvcd_ds = YAMLLoader.read(yaml_file=dataset_descriptor)
     elif pathlib.Path(dataset_descriptor).is_dir():
         log.info("Loading dataset from directory '{directory}'".format(directory=dataset_descriptor))
-        deepvcd_ds = DirectoryLoader.load(dataset_dir=dataset_descriptor)
+        deepvcd_ds = DirectoryLoader.load(dataset_dir=dataset_descriptor, subsets=[subset])
     else:
         raise ValueError(f"No such file or directory: '{dataset_descriptor}'")
 
@@ -420,6 +421,12 @@ if __name__ == '__main__':
                         type=str, 
                         default=None,
                         required=True)
+    parser.add_argument('-s', '--subset', 
+                        help="Subset to use for testing. Can be one of 'val' or 'test' (default).", 
+                        dest='subset', 
+                        type=str, 
+                        default="test",
+                        required=True)    
     parser.add_argument('-n', '--norm',
                         dest='norm',
                         type=str,

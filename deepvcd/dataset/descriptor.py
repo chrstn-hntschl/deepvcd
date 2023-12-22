@@ -245,8 +245,9 @@ class YAMLLoader(DescriptorLoader):
 
 
 class DirectoryLoader(DescriptorLoader):
-    def __init__(self, dataset_path:str) -> None:
+    def __init__(self, dataset_path:str, subsets:list=["train", "val", "test"]) -> None:
         self.dataset_dir = pathlib.Path(dataset_path)
+        self.subsets = subsets
         if not self.dataset_dir.is_dir():
             raise ValueError("Dataset path #{0}' is not a valid path!".format(dataset_path))
 
@@ -255,8 +256,7 @@ class DirectoryLoader(DescriptorLoader):
         version = "undefined"
         dataset = DatasetDescriptor(name=name, version=version, basepath=str(self.dataset_dir))
 
-        subsets = ["train", "val", "test"]
-        for subset in subsets:
+        for subset in self.subsets:
             subset_dir = self.dataset_dir / subset
             if subset_dir.is_dir():
                 log.info(f"Loading subset '{subset}'")
