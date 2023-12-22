@@ -272,5 +272,5 @@ class DirectoryLoader(DescriptorLoader):
         return dataset
 
     @staticmethod
-    def load(dataset_dir):
-        return DirectoryLoader(dataset_dir).get_dataset()
+    def load(dataset_dir:str, subsets:list):
+        return DirectoryLoader(dataset_dir, subsets).get_dataset()
