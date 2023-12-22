@@ -352,15 +352,22 @@ def predict(deepvcd_ds, subset="val", weights="imagenet", input_size=227, norm="
 
 
 def _main(cli_args):
+    import pathlib
+    from deepvcd.dataset.descriptor import YAMLLoader, DirectoryLoader
+
     if cli_args.weights_files == "imagenet" or cli_args.weights_files == ["imagenet"]:
          log.info("Using pre-trained ILSVRC2012 weights")
          weights_files = ["imagenet"]
     else:
         weights_files=cli_args.weights_files
 
-    from deepvcd.dataset.descriptor import YAMLLoader
-    log.info("Loading dataset from descriptor '{0}'".format(cli_args.dataset))
-    deepvcd_ds = YAMLLoader.read(cli_args.dataset)
+    dataset_descriptor = cli_args.dataset
+    if pathlib.Path(dataset_descriptor).is_file():
+        log.info("Loading dataset from descriptor file '{filename}'".format(filename=dataset_descriptor))
+        deepvcd_ds = YAMLLoader.read(yaml_file=dataset_descriptor)
+    if pathlib.Path(dataset_descriptor).is_dir():
+        log.info("Loading dataset from directory '{directory}'".format(directory=dataset_descriptor))
+        deepvcd_ds = DirectoryLoader.load(dataset_dir=dataset_descriptor)
 
     scores = None
     for weights_file in weights_files:
@@ -405,7 +412,12 @@ if __name__ == '__main__':
     log.info("Keras version: {ver}".format(ver=keras.__version__))
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-d', '--dataset', help='Path to dataset descriptor yaml', dest='dataset', type=str, required=True)
+    parser.add_argument('-d', '--dataset', 
+                        help='Path to dataset descriptor yaml or directory following a dataset structure (see documentation).', 
+                        dest='dataset', 
+                        type=str, 
+                        default=None,
+                        required=True)
     parser.add_argument('-n', '--norm',
                         dest='norm',
                         type=str,
