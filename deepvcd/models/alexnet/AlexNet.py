@@ -347,7 +347,7 @@ def predict(deepvcd_ds, subset="val", weights="imagenet", input_size=227, norm="
                 ds_ = ds_.cache()
                 ds_ = ds_.prefetch(buffer_size=tf.data.AUTOTUNE)
                 scores[offset:min(offset+chunk_size,len(ds))] += model.predict(x=ds_,
-                                        verbose=1)
+                                        verbose=2)
                 cnt += 1
                 gc.collect()
                 K.clear_session() 
