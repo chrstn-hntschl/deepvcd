@@ -14,9 +14,9 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import numpy as np
-
-from tensorflow.keras import backend as K
-from tensorflow.keras.preprocessing.image import img_to_array
+from tensorflow import keras
+from keras import backend as K
+from keras.preprocessing.image import img_to_array
 
 import tensorflow as tf
 
@@ -39,6 +39,8 @@ if pil_image is not None:
     # This method is new in version 1.1.3 (2013).
     if hasattr(pil_image, 'LANCZOS'):
         _PIL_INTERPOLATION_METHODS['lanczos'] = pil_image.LANCZOS
+else:
+    _PIL_INTERPOLATION_METHODS = {}
 
 
 def load_img(path, grayscale=False, target_size=None,
