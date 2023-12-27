@@ -272,7 +272,6 @@ class DirectoryLoader(DescriptorLoader):
         log.info(f"Found {len(categories)} concepts in dataset.")
 
         for subset in self.subsets:
-        for subset in subsets:
             subset_dir = self.dataset_dir / subset
             if subset_dir.is_dir():
                 log.info(f"Loading subset '{subset}'")
