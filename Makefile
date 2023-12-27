@@ -22,5 +22,5 @@ _build:
 	docker build -t chrstn_hntschl/deepvcd:tf-$(TF_VER)-$(TAG) --build-arg TF_VER=$(TF_VER) --build-arg USER=$(USER) -f $(DOCKER_FILE) .
 
 dev: _build 
-	docker run $(DOCKER_FLAGS) --rm -it -v $(CURDIR):/home/$(USER)/deepvcd -v $(DATA):/data/datasets -v $(CHECKPOINTS):/data/checkpoints --workdir /home/$(USER)/deepvcd --env PYTHONPATH=/home/$(USER)/deepvcd chrstn_hntschl/deepvcd:tf-$(TF_VER)-$(TAG) /bin/bash
+	docker run $(DOCKER_FLAGS) --rm -it --memory=300g --memory-swap=300g -v $(CURDIR):/home/$(USER)/deepvcd -v $(DATA):/data/datasets -v $(CHECKPOINTS):/data/checkpoints --workdir /home/$(USER)/deepvcd --env PYTHONPATH=/home/$(USER)/deepvcd chrstn_hntschl/deepvcd:tf-$(TF_VER)-$(TAG) /bin/bash
 
