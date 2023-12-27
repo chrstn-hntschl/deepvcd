@@ -16,7 +16,7 @@ from __future__ import print_function
 import numpy as np
 from tensorflow import keras
 from keras import backend as K
-from keras.preprocessing.image import img_to_array
+from keras.utils import img_to_array
 
 import tensorflow as tf
 
