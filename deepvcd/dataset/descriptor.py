@@ -85,7 +85,7 @@ class DatasetDescriptor(object):
         if category is None:
             return [os.path.join(self.basepath, fname) for fname in self.ground_truth[subset]['images'].values()]
         else:
-            posids = self.ground_truth[subset]['gt'][category]
+            posids = self.ground_truth[subset]['gt'].get(category, list())
 
             pos = [os.path.join(self.basepath, self.ground_truth[subset]['images'][id]) for id in posids]
 
@@ -93,7 +93,7 @@ class DatasetDescriptor(object):
                 return pos
             else:
                 if self.neg_category is not None:
-                    negids = self.ground_truth[subset]['gt'][self.neg_category]
+                    negids = self.ground_truth[subset]['gt'].get(self.neg_category, list())
                 else:
                     negids = list(set(self.ground_truth[subset]['images'].keys()) - set(posids))
 
@@ -247,8 +247,9 @@ class YAMLLoader(DescriptorLoader):
 
 
 class DirectoryLoader(DescriptorLoader):
-    def __init__(self, dataset_path:str) -> None:
+    def __init__(self, dataset_path:str, subsets:list=["train", "val", "test"]) -> None:
         self.dataset_dir = pathlib.Path(dataset_path)
+        self.subsets = subsets
         if not self.dataset_dir.is_dir():
             raise ValueError("Dataset path #{0}' is not a valid path!".format(dataset_path))
 
@@ -257,7 +258,6 @@ class DirectoryLoader(DescriptorLoader):
         version = "undefined"
         dataset = DatasetDescriptor(name=name, version=version, basepath=str(self.dataset_dir))
 
-        subsets = ["train", "val", "test"]
         concepts_file = self.dataset_dir / "concepts.json"
         if concepts_file.exists():
             categories = json.load(open(concepts_file, 'r'))
@@ -271,6 +271,7 @@ class DirectoryLoader(DescriptorLoader):
                     categories.append(class_dir.name)
         log.info(f"Found {len(categories)} concepts in dataset.")
 
+        for subset in self.subsets:
         for subset in subsets:
             subset_dir = self.dataset_dir / subset
             if subset_dir.is_dir():
@@ -282,5 +283,5 @@ class DirectoryLoader(DescriptorLoader):
         return dataset
 
     @staticmethod
-    def load(dataset_dir):
-        return DirectoryLoader(dataset_dir).get_dataset()
+    def load(dataset_dir:str, subsets:list):
+        return DirectoryLoader(dataset_dir, subsets).get_dataset()
