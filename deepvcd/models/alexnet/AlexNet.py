@@ -1,21 +1,20 @@
 import os
-from termios import VLNEXT
 import warnings
 import logging
 import numpy as np
 
-from tensorflow.keras import backend as K
-from tensorflow.keras import Model, Input
-from tensorflow.keras.layers import Dense, Flatten, Dropout, MaxPooling2D, Conv2D, ZeroPadding2D, BatchNormalization, Lambda, Activation
+from tensorflow import keras
+from keras import backend as K
+from keras import Model, Input
+from keras.layers import Dense, Flatten, Dropout, MaxPooling2D, Conv2D, ZeroPadding2D, BatchNormalization, Lambda, Activation
 from tensorflow.python.keras.utils import layer_utils
-from tensorflow.keras.initializers import Constant, RandomNormal
-from tensorflow.keras import regularizers
+from keras.initializers import Constant, RandomNormal
+from keras import regularizers
 import tensorflow as tf
 
 from keras.applications import imagenet_utils
 
-from deepvcd.metrics import top_k_error
-from deepvcd.helpers.image import read_image, one_hot
+from deepvcd.helpers.image import read_image
 from deepvcd.models.layers import LRN2D
 
 log = logging.getLogger(__name__)
@@ -309,12 +308,13 @@ def AlexNetFlat(include_top=True,
 
 
 def predict(deepvcd_ds, subset="val", weights="imagenet", input_size=227, norm="lrn", average_results=True):
+    import gc
+
     num_classes = len(deepvcd_ds.get_labels())
     model_class = globals()["AlexNetFlat"]
     model = model_class(include_top=True, input_shape=(input_size, input_size, 3), norm=norm, weights=weights, classes=num_classes)
 
     ds,_ = deepvcd_ds.get_tfdataset(subset=subset, shuffle_files=False)
-    ds = ds.map(lambda x,y: (read_image(x), y), num_parallel_calls=tf.data.AUTOTUNE)
    
     gt = list()
     for _, label in ds:
@@ -332,27 +332,36 @@ def predict(deepvcd_ds, subset="val", weights="imagenet", input_size=227, norm="
     #ilsvrc2012_mean = [0.48184115, 0.453552, 0.3977624]
     log.debug("Using mean={mean}".format(mean=ilsvrc2012_mean))
 
-    scores = list()
+    chunk_size = 50000
+    cnt = 0
+    scores = np.zeros((len(ds),num_classes))
     for region in regions:
         for flip in [False, True]:
-            ds_ = ds.map(lambda x, y: (preprocess_predict(x, mean=ilsvrc2012_mean, crop_region=region, horizontal_flip=flip), y), num_parallel_calls=tf.data.AUTOTUNE)
-            ds_ = ds_.map(lambda x,y: one_hot(x,y,num_classes))
-            ds_ = ds_.batch(256)
-            ds_ = ds_.prefetch(buffer_size=tf.data.AUTOTUNE)
-
             log.info("Computing model scores for region '{region} (flipped={flipped})'".format(region=region, flipped=flip))
-            scores_ = model.predict(x=ds_,
-                                   verbose=2)
-            scores.append(scores_)
-
-    avg_scores = sum(scores)
-    scores = avg_scores / (2 * len(scores))
+            for offset in range(0, len(ds), chunk_size):
+                ds_ = ds.skip(offset)
+                ds_ = ds_.take(chunk_size)
+                ds_ = ds_.map(lambda x,y: (read_image(x), y), num_parallel_calls=tf.data.AUTOTUNE)
+                ds_ = ds_.map(lambda x, y: preprocess_predict(x, mean=ilsvrc2012_mean, crop_region=region, horizontal_flip=flip), num_parallel_calls=tf.data.AUTOTUNE)
+                ds_ = ds_.batch(128)
+                ds_ = ds_.cache()
+                ds_ = ds_.prefetch(buffer_size=tf.data.AUTOTUNE)
+                #model = model_class(include_top=True, input_shape=(input_size, input_size, 3), norm=norm, weights=weights, classes=num_classes)
+                scores[offset:min(offset+chunk_size,len(ds))] += model.predict(x=ds_,
+                                        verbose=1)
+                cnt += 1
+                #model = None
+                gc.collect()
+                K.clear_session() 
+    scores /= cnt
+    log.info("returning.")
     return gt, scores
 
 
 def _main(cli_args):
     import pathlib
     from deepvcd.dataset.descriptor import YAMLLoader, DirectoryLoader
+    from deepvcd.metrics import top_k_error
 
     if cli_args.weights_files == "imagenet" or cli_args.weights_files == ["imagenet"]:
          log.info("Using pre-trained ILSVRC2012 weights")
@@ -375,11 +384,13 @@ def _main(cli_args):
     gt = None
     for weights_file in weights_files:
         log.info("Using weights from '{weights_file}'".format(weights_file=weights_file))
-        gt, scores_ = predict(norm=None if cli_args.norm.lower()=="none" else cli_args.norm,
-                              input_size=cli_args.input_size,
+        gt, scores_ = predict(deepvcd_ds=deepvcd_ds,
+                              subset=subset,
                               weights=weights_file,
-                              deepvcd_ds=deepvcd_ds,
+                              input_size=cli_args.input_size,
+                              norm=None if cli_args.norm.lower()=="none" else cli_args.norm,
                               average_results=True)
+        log.info("Computing top-k-error")
         top5error = top_k_error(y_true=gt, y_pred=scores_, k=5)
         log.info("Top-5-error-rate (single net): {top5error}".format(top5error=top5error))
 
@@ -426,7 +437,7 @@ if __name__ == '__main__':
                         dest='subset', 
                         type=str, 
                         default="test",
-                        required=True)    
+                        required=False)    
     parser.add_argument('-n', '--norm',
                         dest='norm',
                         type=str,
