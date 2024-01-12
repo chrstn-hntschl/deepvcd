@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-from argparse import ArgumentError
 import logging
 import pathlib
 import functools
 import json
+from typing import List
  
 import numpy as np
+from argparse import ArgumentError
 
 import tensorflow as tf
 from keras.models import Model, Sequential, clone_model
@@ -288,7 +289,7 @@ def optimize_lr_schedule(learner:TransferLearner, train_ds, val_ds, finetuning_l
     }
 
 
-def hyperparameter_optimization(deepvcd_ds:DatasetDescriptor, norm:str="lrn", model_weights:str="imagenet", num_xval_folds=5, seed:int=None):
+def hyperparameter_optimization(deepvcd_ds:DatasetDescriptor, norm:str="lrn", model_weights:str="imagenet", num_xval_folds=5, start_ft_layer:List[str]=None, seed:int=None):
     if seed is None:
         from datetime import datetime
         seed = datetime.now().microsecond
@@ -303,7 +304,7 @@ def hyperparameter_optimization(deepvcd_ds:DatasetDescriptor, norm:str="lrn", mo
     # HINT: optimizing learing rate schedule for retraining stage is actually independent from optimizing the fine-tuning layer. 
     # However, in order to fine-tune, we need a model, that has not been trained on any samples that were already used during retraining - hence we fine-tune per fold.
     grid_search_results = dict()
-    grid = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5', 'dense_1', 'dense_2']
+    grid = start_ft_layer if start_ft_layer is not None else ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5', 'dense_1', 'dense_2']
 
     for start_ft_layer in grid:
         log.info(f"Optimizing for fine-tuning layer '{start_ft_layer}'")
@@ -475,12 +476,6 @@ def main():
     #FIXME: missing: initial_lr_rt, lr_ft, max_epochs_rt, max_epochs_ft
     #FIXME: model hyperparameters `chop-off layer` is currently hard-coded!
     parser = argparse.ArgumentParser()
-    parser.add_argument("-n", "--norm",
-                        dest="norm",
-                        type=str,
-                        help="Normalization to be used after first and second convolutional layer ('lrn' (default), 'tflrn', 'batch' or None). Must be the same used in the pre-trained model!",
-                        default="lrn",
-                        required=False)
     parser.add_argument("-d", "--dataset",
                         dest="dataset",
                         type=str,
@@ -493,6 +488,12 @@ def main():
                         help="Path to hdf5 file with pre-trained model weights. If none given, ImageNet weights are loaded.",
                         default="imagenet",
                         required=False)
+    parser.add_argument("-n", "--norm",
+                        dest="norm",
+                        type=str,
+                        help="Normalization to be used after first and second convolutional layer ('lrn' (default), 'tflrn', 'batch' or None). Must be the same used in the pre-trained model!",
+                        default="lrn",
+                        required=False)
     parser.add_argument("-s", "--seed", dest="seed", 
                         type=int, 
                         help="Set the random seed.", 
@@ -500,7 +501,16 @@ def main():
                         required=False)
     parser.add_argument("--swap_val_test_data", dest="swap_val_test",
                         action="store_true",
+                        default=False,
+                        required=False,
                         help="Flag to indicate, whether validation and test subsets should be swapped in provided dataset (default: False).")
+    parser.add_argument("--start_ft_layer", dest="start_ft_layer",
+                        nargs='+', 
+                        default=None,
+                        required=False,
+                        help="List of layers to test for fine-tuning. Each layer listed here will be used as start-layer for fine-tuning, i.e. all layers >= start-layer will be fine-tuned." \
+                             "If multiple start-layers are provided, grid search is conducted to find best."
+                        )
 
     args = parser.parse_args()
     deepvcd_ds = None
@@ -523,6 +533,7 @@ def main():
                                                norm=norm, 
                                                model_weights=args.weights, 
                                                num_xval_folds=5, 
+                                               start_ft_layer=args.start_ft_layer,
                                                seed=args.seed)
     retrain_and_finetune(deepvcd_ds=deepvcd_ds,
                          norm=norm,
